@@ -1,0 +1,139 @@
+# Product: HAPROXY
+# Category: Network
+# Supported Format: SYSLOG
+# Last Updated: 2024-9-11
+# Maintainer: Adrianus Vian Habirowo <vian@idjo.cc>
+
+filter {
+  mutate {
+    replace => {
+      "process_name" => ""
+      "process_pid" => ""
+      "client_ip" => ""
+      "client_port" => ""
+      "timestamp" => ""
+      "frontend_name" => ""
+      "backend_name" => ""
+      "server_name" => ""
+      "http_status_code" => ""
+      "bytes_read" => ""
+      "http_verb" => ""
+      "http_request" => ""
+      "http_version" => ""
+      "event.idm.read_only_udm.metadata.product_name" => "HAProxy"
+      "event.idm.read_only_udm.metadata.vendor_name" => "HAProxy Enterprise"
+      "event.idm.read_only_udm.metadata.event_type" => "NETWORK_HTTP"
+      "event.idm.read_only_udm.metadata.log_type" => "HAPROXY"
+    }
+  }
+
+  grok {
+    match => {
+      "message" => [
+        "<%{INT}>%{SYSLOGTIMESTAMP} %{DATA:process_name}\\[%{INT:process_pid}\\]: %{IP:client_ip}:%{INT:client_port} \\[%{DATA:timestamp}\\] %{NOTSPACE:frontend_name} %{NOTSPACE:backend_name}/%{NOTSPACE:server_name} %{DATA} %{INT:http_status_code:int64} %{INT:bytes_read:int64} %{DATA} \\\"%{WORD:http_verb} %{URIPATHPARAM:http_request} HTTP/%{NUMBER:http_version}\\\""
+      ]
+    }
+
+    overwrite => [
+      "process_name"
+      "process_pid"
+      "client_ip"
+      "client_port"
+      "timestamp"
+      "frontend_name"
+      "backend_name"
+      "server_name"
+      "bytes_read"
+      "http_status_code"
+      "http_verb"
+      "http_request"
+      "http_version"
+    ]
+
+    on_error => "_error_does_not_match"
+  }
+
+  if [_error_does_not_match] {
+    drop {
+      tag => "TAG_NO_SECURITY_VALUE"
+    }
+  }
+
+  mutate {
+    replace => {
+      "event.idm.read_only_udm.metadata.description" => "HTTP %{http_verb} Request"
+    }
+  }
+
+  mutate {
+    replace => {
+      "event.idm.read_only_udm.target.process.command_line" => "%{process_name}"
+    }
+  }
+
+  mutate {
+    replace => {
+      "event.idm.read_only_udm.target.process.pid" => "%{process_pid}"
+    }
+  }
+
+  mutate {
+    merge => {
+      "event.idm.read_only_udm.principal.ip" => "client_ip"
+    }
+  }
+
+  mutate {
+    merge => {
+      "event.idm.read_only_udm.principal.port" => "client_port"
+    }
+  }
+
+  mutate {
+    replace => {
+      "event.idm.read_only_udm.target.process.pid" => "%{process_pid}"
+    }
+  }
+
+  mutate {
+    replace => {
+      "event.idm.read_only_udm.target.hostname" => "%{backend_name}/%{server_name}"
+    }
+  }
+
+  mutate {
+    replace => {
+      "event.idm.read_only_udm.network.http.method" => "%{http_verb}"
+    }
+  }
+
+  mutate {
+    replace => {
+      "event.idm.read_only_udm.network.http.response_code" => "%{http_status_code}"
+    }
+  }
+
+  mutate {
+    replace => {
+      "event.idm.read_only_udm.network.http.recieved_bytes" => "%{bytes_read}"
+    }
+  }
+
+  mutate {
+    replace => {
+      "event.idm.read_only_udm.network.ip_protocol" => "TCP"
+    }
+  }
+
+  mutate {
+    replace => {
+      "event.idm.read_only_udm.target.url" => "%{http_request}"
+    }
+  }
+
+  mutate {
+    merge => {
+      "@output" => "event"
+    }
+  }
+}
